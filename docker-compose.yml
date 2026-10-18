@@ -13,19 +13,20 @@ services:
     ports:
       - "443:443/tcp"       # HTTP API, login, WebSocket voice fallback
       - "28280:28280/udp"   # QUIC voice
-      # - "28284:28284/udp" # Peering with other BVC servers (only if you use peering)
+      # - "28284:28284/udp" # Peering with other BVC servers (only if you enable peering)
     env_file:
       - .env
     volumes:
-      # Holds config.hcl, the SQLite DB (contains the mTLS CA — back it up!), certs and logs.
+      # Holds config.hcl, the SQLite DB (contains the login CA, back it up!), certs and logs.
       - ./data:/data
     healthcheck:
-      # The certificate is issued for BVC_DOMAIN, so resolve that name to the container itself.
-      test: ["CMD", "curl", "-fsS", "--resolve", "${BVC_DOMAIN}:443:127.0.0.1", "https://${BVC_DOMAIN}/health/readiness"]
+      # The image has no curl; BusyBox wget is there. The check only asks "is the server up?",
+      # so certificate verification is skipped (the public cert is for BVC_DOMAIN, not 127.0.0.1).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "--no-check-certificate", "https://127.0.0.1/health/readiness"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 120s    # first start has to obtain the Let's Encrypt certificate
+      start_period: 120s    # option B's first start has to obtain the certificate
     logging:
       driver: json-file
       options:

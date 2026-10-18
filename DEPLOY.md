@@ -1,19 +1,20 @@
 # Deployment guide
 
 A step-by-step guide from an empty VPS to friends talking in your Realm. Follow the phases in order.
-Most of it is a one-time setup, about 30–60 minutes. [Day-2 operations](#phase-7-day-2-operations) covers upkeep.
+Most of it is a one-time setup, about 30–60 minutes. [Phase 7](#phase-7-day-2-operations) covers upkeep.
 
-> Throughout this guide, replace `voice.example.com` with your own domain and `YourGamertag` with real Xbox gamertags.
+> Throughout this guide, replace `yourname.duckdns.org` (or `voice.example.com`) with your own hostname and `YourGamertag` with real Xbox gamertags.
 
 ---
 
 ## Contents
 
 - [Before you start: checklist](#before-you-start-checklist)
+- [Choose a hostname: DuckDNS or your own domain](#choose-a-hostname-duckdns-or-your-own-domain)
 - [Phase 1: Get a VPS](#phase-1-get-a-vps)
-- [Phase 2: Domain and Cloudflare](#phase-2-domain-and-cloudflare)
-- [Phase 3: Prepare the VPS](#phase-3-prepare-the-vps)
-- [Phase 4: Install and start the voice server](#phase-4-install-and-start-the-voice-server)
+- [Phase 2: Prepare the VPS](#phase-2-prepare-the-vps)
+- [Phase 3: Install and configure](#phase-3-install-and-configure)
+- [Phase 4: Certificate and start](#phase-4-certificate-and-start)
 - [Phase 5: Admin and players](#phase-5-admin-and-players)
 - [Phase 6: Put the addon on the Realm](#phase-6-put-the-addon-on-the-realm)
 - [Phase 7: Day-2 operations](#phase-7-day-2-operations)
@@ -26,13 +27,30 @@ Most of it is a one-time setup, about 30–60 minutes. [Day-2 operations](#phase
 | You need | Why |
 |---|---|
 | A Linux VPS with a public IPv4 (Ubuntu 22.04/24.04 assumed) | Runs the voice server in Docker |
-| A domain name you control | BVC refuses bare IPs and self-signed certificates |
-| A free Cloudflare account, with the domain's DNS on Cloudflare | Automatic Let's Encrypt certificates via DNS-01 (no port 80) |
+| A hostname: a **free DuckDNS name** or your own domain | BVC refuses bare IPs and self-signed certificates |
 | A Minecraft Realm you own (Bedrock) | Where the world runs |
 | Minecraft Bedrock on a PC/phone (you, the owner) | To build the world with the addon and upload it |
 | Every player: the BVC app ([downloads](https://www.bedrockvoicechat.com/wiki/start/downloads/)) | The app is what connects the Realm to voice |
 
 Also check that the Realm's Minecraft version is on the [supported versions list](https://www.bedrockvoicechat.com/wiki/platforms/version-support/). If it isn't, voice won't work until BVC catches up.
+
+---
+
+## Choose a hostname: DuckDNS or your own domain
+
+BVC **requires a hostname with a publicly trusted certificate**. The app checks it like a browser does, and a bare IP or self-signed certificate is refused. You don't need to buy a domain, though:
+
+| | Option A: DuckDNS (default) | Option B: own domain on Cloudflare |
+|---|---|---|
+| Cost | Free | Domain price |
+| Hostname | `yourname.duckdns.org` | `voice.example.com` |
+| DNS setup | None: `cert.sh` points the name at the VPS | A record on Cloudflare |
+| Certificate | `cert.sh` (lego) gets it; daily cron renews it and restarts BVC | BVC gets and renews it itself |
+| Reliability | Depends on DuckDNS (free service, occasional outages) | Depends on Cloudflare |
+
+> **Not suitable:** `sslip.io`/`nip.io` (Let's Encrypt rate limits are shared with every user worldwide) and BVC's own *assigned hostnames*, which are unreleased and limited to some Patreon/YouTube members.
+
+Pick one. The phases below have A and B steps where they differ.
 
 ---
 
@@ -47,45 +65,21 @@ Also check that the Realm's Minecraft version is on the [supported versions list
 
 > Port 443 must be free on this VPS. If you already run a website on it, read [Port 443 is already taken](docs/TROUBLESHOOTING.md#port-443-is-already-taken) first.
 
----
+### Get your hostname
 
-## Phase 2: Domain and Cloudflare
+**Option A (DuckDNS):**
+1. Go to <https://www.duckdns.org> and sign in (GitHub, Google, Reddit…).
+2. Under **domains**, add a subdomain, e.g. `mycraftvoice` → `mycraftvoice.duckdns.org`. You don't need to enter the IP; `cert.sh` sets it later.
+3. Copy the **token** shown at the top of the page.
 
-### 2.1 Put the domain on Cloudflare
-
-Skip this if your domain is already on Cloudflare.
-
-1. Cloudflare dashboard → **Add a domain** → Free plan.
-2. At your registrar, change the nameservers to the two Cloudflare gives you. This can take from minutes to a few hours.
-
-### 2.2 DNS record for the voice server
-
-Cloudflare → your domain → **DNS → Records → Add record**:
-
-| Type | Name | Content | Proxy status |
-|---|---|---|---|
-| `A` | `voice` | `<VPS IPv4>` | **DNS only** (grey cloud) |
-
-> **The grey cloud matters.** Cloudflare's proxy (orange cloud) only passes HTTP; voice uses UDP and will fail.
-
-Check it resolves (from your PC):
-
-```bash
-nslookup voice.example.com
-```
-
-### 2.3 API token for certificates
-
-1. Cloudflare → profile icon → **My Profile → API Tokens → Create Token**.
-2. Use the **Edit zone DNS** template.
-3. **Zone Resources:** Include → Specific zone → your domain.
-4. Create it and copy the token. You'll put it in `.env` in Phase 4.
-
-> Never use the Global API Key. It gives full control of your Cloudflare account.
+**Option B (own domain on Cloudflare):**
+1. Put the domain on Cloudflare (free plan) and switch the nameservers at your registrar.
+2. **DNS → Add record:** `A`, name `voice`, content `<VPS IPv4>`, proxy status **DNS only** (grey cloud). Cloudflare's orange-cloud proxy doesn't carry UDP voice.
+3. **My Profile → API Tokens → Create Token → Edit zone DNS** template, limited to that zone. Copy the token. Never use the Global API Key.
 
 ---
 
-## Phase 3: Prepare the VPS
+## Phase 2: Prepare the VPS
 
 SSH in:
 
@@ -96,7 +90,7 @@ ssh root@<VPS IPv4>
 Update the system and install the tools:
 
 ```bash
-apt update && apt upgrade -y && apt install -y git curl openssl ufw
+apt update && apt upgrade -y && apt install -y git curl ufw
 ```
 
 Install Docker (official convenience script, includes the Compose plugin):
@@ -125,78 +119,102 @@ If your provider also has a **cloud firewall** (Hetzner Firewall, DigitalOcean C
 | 443 | TCP | Login, HTTP API, WebSocket voice fallback |
 | 28280 | UDP | Voice (QUIC) |
 
+Port 80 is **not** needed: both certificate options use DNS validation.
+
 ---
 
-## Phase 4: Install and start the voice server
+## Phase 3: Install and configure
 
-### 4.1 Get the files
-
-Clone this repository (or copy the folder with `scp`/WinSCP) to `/opt/bvc`:
+Clone the repository to `/opt/bvc`:
 
 ```bash
-git clone https://github.com/<you>/<this-repo>.git /opt/bvc
+git clone https://github.com/tam11a/minecraft-bvc-for-vps.git /opt/bvc
 ```
 
 ```bash
 cd /opt/bvc
 ```
 
-### 4.2 Run the setup script
+Run the setup script. It creates `.env`, makes `./data` writable for the container user (uid 100, gid 101) and opens 443/tcp + 28280/udp in ufw:
 
 ```bash
 bash setup.sh
 ```
 
-It:
-- creates `.env` from `.env.example`,
-- generates `BVC_ACCESS_TOKEN`,
-- makes `./data` writable for the container user (uid 100, gid 101),
-- opens 443/tcp and 28280/udp in ufw.
-
-### 4.3 Fill in `.env`
+Edit `.env`:
 
 ```bash
 nano .env
 ```
 
-| Variable | Set it to |
+**Option A (DuckDNS):** set these and leave the option B lines empty:
+
+| Variable | Value |
 |---|---|
-| `BVC_VERSION` | Leave as is unless you're upgrading. Must match the players' app and the Realm addon version. |
+| `BVC_DOMAIN` | `mycraftvoice.duckdns.org` |
+| `DUCKDNS_TOKEN` | The token from duckdns.org |
+| `CERT_EMAIL` | Your email (Let's Encrypt expiry notices) |
+| `BVC_TLS_CERTIFICATE` / `BVC_TLS_KEY` | Leave the defaults |
+
+**Option B (Cloudflare):** **empty** the four option A lines (`DUCKDNS_TOKEN`, `CERT_EMAIL`, `BVC_TLS_CERTIFICATE`, `BVC_TLS_KEY`), then set:
+
+| Variable | Value |
+|---|---|
 | `BVC_DOMAIN` | `voice.example.com` |
-| `BVC_ACME_EMAIL` | Your email (Let's Encrypt expiry notices) |
-| `CF_API_TOKEN` | The token from Phase 2.3 |
-| `BVC_ACCESS_TOKEN` | Already generated. Realms don't use it, but the server requires it. |
+| `BVC_ACME_PROVIDER` | `cloudflare` |
+| `BVC_ACME_EMAIL` | Your email |
+| `BVC_ACME_API_TOKEN` | The Cloudflare token |
 
-Save (Ctrl+O, Enter) and exit (Ctrl+X).
+Leave `BVC_VERSION` as is unless you're upgrading. It must match the players' app and the Realm addon. Save with Ctrl+O, Enter, then exit with Ctrl+X.
 
-> **Testing first?** To avoid Let's Encrypt rate limits while experimenting, uncomment the `directory = …staging…` line in `data/config.hcl`. Comment it out again before real use, because players' apps reject staging certificates.
+> Setting both options makes the server refuse to start. Only one certificate source may be configured.
 
-### 4.4 Start
+---
+
+## Phase 4: Certificate and start
+
+### Option A: get the certificate first
+
+```bash
+bash cert.sh
+```
+
+It points `yourname.duckdns.org` at this VPS, gets a Let's Encrypt certificate via the DuckDNS API (takes about a minute), and installs it in `data/tls/`. Then start:
 
 ```bash
 docker compose up -d
 ```
 
-Watch the logs. The first start requests the certificate, which takes about 1–2 minutes:
+### Option B: just start
+
+BVC requests the certificate itself on first start (about 1–2 minutes):
+
+```bash
+docker compose up -d
+```
+
+> Testing option B a lot? Add `BVC_ACME_DIRECTORY=https://acme-staging-v02.api.letsencrypt.org/directory` to `.env` to avoid Let's Encrypt rate limits, then remove it for real use, because the apps reject staging certificates.
+
+### Check it
+
+Watch the logs (Ctrl+C stops following):
 
 ```bash
 docker compose logs -f
 ```
 
-Press Ctrl+C to stop following. Look for errors about `acme`, `tls` or `config`. A missing `.env` value stops the server with an error naming it.
+A good start ends with `TLS demultiplexer listening … listen=[::]:443`. Errors name the problem (missing certificate file, ACME failure, both TLS options set…).
 
-Check the container is **healthy**:
+After about a minute the container should show **healthy**:
 
 ```bash
 docker compose ps
 ```
 
-### 4.5 Verify from outside
-
-From your PC (not the VPS):
+From your **own PC** (not the VPS):
 
 ```bash
-curl https://voice.example.com/api/config
+curl https://yourname.duckdns.org/api/config
 ```
 
 | Result | Meaning |
@@ -204,15 +222,15 @@ curl https://voice.example.com/api/config
 | JSON | Running, certificate valid, 443 reachable ✅ |
 | Connection refused | Container not running, or port not published |
 | Timeout | Firewall (ufw or provider firewall) |
-| Certificate error | Certificate not issued yet / wrong domain. Check logs. |
+| Certificate error | Certificate missing / wrong hostname. Check logs. |
 
-UDP 28280 can't be tested with curl. If players can sign in but hear nothing later, UDP is the cause. See [troubleshooting](docs/TROUBLESHOOTING.md#sign-in-works-but-nobody-hears-anything).
+UDP 28280 can't be tested with curl. If players can sign in but hear nothing, UDP is the cause. See [troubleshooting](docs/TROUBLESHOOTING.md#sign-in-works-but-nobody-hears-anything).
 
 ---
 
 ## Phase 5: Admin and players
 
-A Realm can't tell BVC who your players are, so **every player must be added manually**. Unknown players get `AUTH02` when signing in.
+A Realm can't tell BVC who your players are, so **every player must be added**. Unknown players get `AUTH02` when signing in.
 
 ### 5.1 Make yourself admin
 
@@ -221,10 +239,10 @@ bash add-player.sh YourGamertag
 ```
 
 ```bash
-docker compose exec bvc bvc-server admin bootstrap -c /data/config.hcl -p YourGamertag -g minecraft
+docker compose exec bvc bvc-server admin bootstrap -p YourGamertag -g minecraft
 ```
 
-The first command prints a one-time **login code** (valid 24 h) for you.
+The first command registers you and prints a one-time **login code** (valid 24 h). The second gives you admin.
 
 ### 5.2 Add each player
 
@@ -232,10 +250,11 @@ The first command prints a one-time **login code** (valid 24 h) for you.
 bash add-player.sh FriendGamertag
 ```
 
-Send each player their code and the [player guide](docs/PLAYER-GUIDE.md).
+Send each player the server address (`https://yourname.duckdns.org`), their code and the [player guide](docs/PLAYER-GUIDE.md).
 
-- Codes are single-use and expire after 24 h. Run the script again for a new one.
-- Once you're signed in as admin, you can also add players in the app: **Settings → Manage Players**.
+- Codes are single-use and expire after 24 h (pass a second argument in seconds to change that). Run the script again for a new one.
+- Once added, players can also sign in with their Microsoft account instead of a code.
+- Once you're signed in as admin, you can add players in the app too: **Settings → Manage Players**.
 
 ---
 
@@ -285,17 +304,33 @@ You should see connection activity and no repeated errors.
 
 ## Phase 7: Day-2 operations
 
+### Certificate renewal (option A only)
+
+Let's Encrypt certificates last 90 days. Run `cert.sh` daily from cron. It only renews when fewer than 30 days are left and restarts BVC only when the certificate changed. Open the crontab:
+
+```bash
+crontab -e
+```
+
+Add this line:
+
+```
+30 3 * * * cd /opt/bvc && bash cert.sh >> lego/renew.log 2>&1
+```
+
+Option B needs nothing: BVC renews its own certificate.
+
 ### Backups
 
 `./data/bvc.sqlite3` contains the **certificate authority for every player login**. Lose it and every player has to be re-added and signed in again.
 
-Create a backup (stops the server for a few seconds, writes `backups/bvc-data-<timestamp>.tar.gz`):
+Create a backup (stops the server for a few seconds, writes `backups/bvc-data-<timestamp>.tar.gz`, keeps the newest 14):
 
 ```bash
 bash backup.sh
 ```
 
-Nightly at 04:00 via cron (`crontab -e`):
+Nightly at 04:00 via cron:
 
 ```
 0 4 * * * cd /opt/bvc && bash backup.sh >> backups/backup.log 2>&1
@@ -351,12 +386,15 @@ Run all of these from `/opt/bvc`.
 |---|---|
 | Status / health | `docker compose ps` |
 | Live logs | `docker compose logs -f` |
-| Restart (after editing `config.hcl`) | `docker compose restart` |
+| Restart (after editing `config.hcl` or `.env`) | `docker compose up -d --force-recreate` |
 | Stop | `docker compose down` |
 | Add a player | `bash add-player.sh <Gamertag>` |
-| Give admin | `docker compose exec bvc bvc-server admin bootstrap -c /data/config.hcl -p <Gamertag> -g minecraft` |
+| Give admin | `docker compose exec bvc bvc-server admin bootstrap -p <Gamertag> -g minecraft` |
+| Renew certificate now (option A) | `bash cert.sh` |
 | Debug logging | set `level = "debug"` in `data/config.hcl`, then restart |
 | JSON log files | `./data/logs/` |
+
+`docker compose restart` re-reads `config.hcl` but **not** `.env`. After changing `.env`, use `up -d --force-recreate`.
 
 ### Uninstall
 
@@ -364,18 +402,18 @@ Run all of these from `/opt/bvc`.
 docker compose down
 ```
 
-Then delete `/opt/bvc` (back up `data/` first if you might come back), and remove the DNS record and Cloudflare token.
+Then delete `/opt/bvc` (back up `data/` first if you might come back), remove the cron lines, and delete the DuckDNS subdomain or the DNS record + Cloudflare token.
 
 ---
 
 ## Final checklist
 
-- [ ] `voice.example.com` A record → VPS IP, **grey cloud**
-- [ ] Cloudflare token scoped to one zone, DNS edit
+- [ ] Hostname resolves to the VPS (`nslookup yourname.duckdns.org`); Cloudflare record is **grey cloud** (option B)
 - [ ] 443/tcp and 28280/udp open in ufw **and** the provider firewall
-- [ ] `.env` filled in; `docker compose ps` shows **healthy**
-- [ ] `curl https://voice.example.com/api/config` returns JSON from outside
+- [ ] Only **one** TLS option filled in `.env`
+- [ ] `docker compose ps` shows **healthy**
+- [ ] `curl https://<hostname>/api/config` returns JSON from outside
 - [ ] You're admin; every player added with `add-player.sh`
 - [ ] Realm world has the **no-net** pack + Beta APIs, same version as `BVC_VERSION`
 - [ ] Two people tested: joined via the **Worlds** tab and can hear each other
-- [ ] Backups scheduled and copied off the VPS
+- [ ] Cron jobs: `cert.sh` daily (option A) and `backup.sh` nightly; backups copied off the VPS

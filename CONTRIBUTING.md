@@ -9,7 +9,7 @@ Thanks for helping out! This repo is deployment glue around [Bedrock Voice Chat]
 | These scripts, compose file, config template or docs | An issue in **this** repository |
 | The BVC server, app, addon, audio, sign-in bugs | [Upstream issues](https://github.com/Alaydriem/bedrock-voice-chat/issues) or the [BVC Discord](https://discord.gg/CdtchD5zxr) |
 
-When opening an issue here, include your `BVC_VERSION`, OS/VPS provider, what you ran, and relevant `docker compose logs` output. **Remove secrets** (`CF_API_TOKEN`, `BVC_ACCESS_TOKEN`, login codes) before posting.
+When opening an issue here, include your `BVC_VERSION`, OS/VPS provider, what you ran, and relevant `docker compose logs` output. **Remove secrets** (`DUCKDNS_TOKEN`, `BVC_ACME_API_TOKEN`, login codes) before posting.
 
 ## Pull requests
 

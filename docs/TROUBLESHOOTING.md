@@ -20,18 +20,25 @@ docker compose logs --tail 200
 | You see | Cause / fix |
 |---|---|
 | Container restarting | Read the logs. Usually a config error (below). |
-| Error naming an `env` variable | That variable is missing/empty in `.env`. |
+| Error naming an `env` variable | That variable is missing/empty in `.env` (e.g. `BVC_DOMAIN`). |
+| `ACME env configuration is incomplete` | Option B is half filled in. Set all three `BVC_ACME_*` values, or empty all of them. |
+| `tls.acme and tls.certificate/tls.key are mutually exclusive` | Both TLS options are filled in `.env`. Empty one, then `docker compose up -d --force-recreate`. |
+| Certificate file not found (`/data/tls/...`) | Option A: run `bash cert.sh` before starting. |
 | Permission denied on `/data/...` | Run `sudo chown -R 100:101 data`, then `docker compose restart`. |
 | `address already in use` on 443 | Another service uses port 443. See [Port 443 is already taken](#port-443-is-already-taken). |
 | Error mentioning `acme`, `cloudflare`, `dns` | See [Certificate problems](#certificate-problems). |
-| Health `unhealthy` but logs fine | Certificate not issued yet (first start), or `BVC_DOMAIN` doesn't match the certificate. |
+| Health `unhealthy` | The healthcheck calls `/health/readiness` inside the container. Check the logs; on option B the first certificate can take up to 2 minutes. |
+
+A good start ends with a line like `TLS demultiplexer listening … listen=[::]:443`.
+
+After changing `.env`, run `docker compose up -d --force-recreate`. A plain `restart` keeps the old environment.
 
 ## 2. Is it reachable from the internet?
 
 From your **own PC**, not the VPS:
 
 ```bash
-curl https://voice.example.com/api/config
+curl https://yourname.duckdns.org/api/config
 ```
 
 | Result | Cause |
@@ -39,22 +46,30 @@ curl https://voice.example.com/api/config
 | JSON | Server, TLS and 443/tcp are fine ✅ |
 | Connection refused | Container down or port not published |
 | Timeout | ufw or the provider's cloud firewall blocks 443/tcp |
-| Certificate error | Certificate not issued / wrong name / staging directory still enabled |
+| Certificate error | Certificate not issued / wrong name / staging directory still set |
 | 404 or an HTML page | Something else answers on 443 (another web server, or Cloudflare proxy is on) |
 
-Check that DNS points at the VPS, and that Cloudflare shows **DNS only** (grey cloud):
+Check that the hostname points at the VPS (and, with Cloudflare, that the record is **DNS only** / grey cloud):
 
 ```bash
-nslookup voice.example.com
+nslookup yourname.duckdns.org
 ```
 
 ## Certificate problems
 
+**Option A (DuckDNS, `cert.sh`):**
+- `DuckDNS update failed (reply: KO)`: wrong `DUCKDNS_TOKEN`, or the subdomain in `BVC_DOMAIN` isn't in your DuckDNS account.
+- lego times out waiting for the TXT record: DuckDNS is slow or down. Run `bash cert.sh` again later; your current certificate keeps working until it expires.
+- Check the certificate BVC serves: `echo | openssl s_client -connect yourname.duckdns.org:443 -servername yourname.duckdns.org 2>/dev/null | openssl x509 -noout -dates`
+- Renewal log (if you used the cron line from DEPLOY.md): `lego/renew.log`.
+
+**Option B (Cloudflare, BVC's built-in ACME):**
 - **Token permissions:** the Cloudflare token needs *Zone → DNS → Edit* on the zone containing `BVC_DOMAIN`.
 - **Wrong zone:** `BVC_DOMAIN` must be inside the zone the token covers.
-- **Rate limited:** after many failed attempts Let's Encrypt blocks you for a while. Test with the staging `directory` line in `data/config.hcl`, then switch back.
-- **Staging left on:** apps reject staging certificates. Comment the `directory` line out and restart.
-- **Self-signed / IP certificates** never work; BVC apps verify certificates like a browser.
+- **Rate limited:** after many failed attempts Let's Encrypt blocks you for a while. Test with `BVC_ACME_DIRECTORY=https://acme-staging-v02.api.letsencrypt.org/directory` in `.env`, then remove it.
+- **Staging left on:** apps reject staging certificates. Remove `BVC_ACME_DIRECTORY` and recreate the container.
+
+**Both:** self-signed and IP-address certificates never work; BVC apps verify certificates like a browser.
 
 ## Sign-in works but nobody hears anything
 
@@ -119,10 +134,10 @@ If the VPS already runs a web server on 443, move BVC's TCP port, e.g. to 8443:
 1. `data/config.hcl` → `port = 8443`
 2. `docker-compose.yml`:
    - ports: `"8443:8443/tcp"` instead of `"443:443/tcp"`
-   - healthcheck: `--resolve ${BVC_DOMAIN}:8443:127.0.0.1` and `https://${BVC_DOMAIN}:8443/health/readiness`
+   - healthcheck URL: `https://127.0.0.1:8443/health/readiness`
 3. `sudo ufw allow 8443/tcp` (+ provider firewall)
 4. `docker compose up -d`
-5. Players use `voice.example.com:8443` as the server address.
+5. Players use `https://yourname.duckdns.org:8443` as the server address.
 
 Don't try to put BVC behind nginx/Caddy as an HTTP reverse proxy. It needs end-to-end TLS with client certificates and UDP.
 
@@ -130,7 +145,7 @@ Don't try to put BVC behind nginx/Caddy as an HTTP reverse proxy. It needs end-t
 
 Before asking upstream ([Discord](https://discord.gg/CdtchD5zxr) / [GitHub issues](https://github.com/Alaydriem/bedrock-voice-chat/issues)), collect:
 
-- output of `curl https://voice.example.com/api/config`
+- output of `curl https://yourname.duckdns.org/api/config`
 - whether UDP 28280 is open (ufw + provider firewall)
 - that you run it with Docker (this repo), `BVC_VERSION`, and that the world is on a Realm (no-net addon)
 - relevant lines from `docker compose logs`

@@ -1,47 +1,26 @@
 # Bedrock Voice Chat server config.
 # Reference: https://www.bedrockvoicechat.com/wiki/reference/configuration/
-# Values come from .env via ${env.VAR}. If a referenced variable is unset, the server will not start.
+#
+# The certificate source is NOT set here. It comes from .env, so you can switch
+# options without editing this file (environment overrides config, empty = unset):
+#   Option A, free DuckDNS subdomain:  BVC_TLS_CERTIFICATE + BVC_TLS_KEY (files made by cert.sh)
+#   Option B, own domain on Cloudflare: BVC_ACME_PROVIDER + BVC_ACME_EMAIL + BVC_ACME_API_TOKEN
+# Use exactly one; the server refuses to start with both.
+#
 # The server reads this file only at startup: `docker compose restart` after editing.
 
 server {
     port      = 443
     quic_port = 28280
+    # If you change quic_port, also set the ports clients are told to use (default [28280]):
+    # advertised_quic_ports = [28280]
 
-    # No peering with other BVC servers, so UDP 28284 can stay closed.
+    # No peering with other BVC servers, so UDP 28284 stays closed.
     peering = false
 
     tls {
+        # The hostname players type into the app. Must match the certificate.
         names = ["${env.BVC_DOMAIN}"]
-
-        # Option 1 (default): Let's Encrypt via Cloudflare DNS-01. No port 80 needed.
-        acme {
-            email     = "${env.BVC_ACME_EMAIL}"
-            provider  = "cloudflare"
-            api_token = "${env.CF_API_TOKEN}"
-            # Uncomment while testing to avoid Let's Encrypt rate limits:
-            # directory = "https://acme-staging-v02.api.letsencrypt.org/directory"
-        }
-
-        # Option 2: acme-dns (DNS not on Cloudflare). Remove the acme block above and use:
-        # acme {
-        #     email      = "${env.BVC_ACME_EMAIL}"
-        #     provider   = "acme-dns"
-        #     server_url = "https://auth.acme-dns.io"
-        #     username   = "${env.ACME_DNS_USERNAME}"
-        #     password   = "${env.ACME_DNS_PASSWORD}"
-        #     subdomain  = "${env.ACME_DNS_SUBDOMAIN}"
-        # }
-
-        # Option 3: your own certificate (full chain!). Remove the acme block, put the
-        # files in ./data/tls/ and use:
-        # certificate = "/data/tls/fullchain.pem"
-        # key         = "/data/tls/privkey.pem"
-    }
-
-    # Required by the server. A Realm (no-net addon) never uses it; it only matters
-    # if you later move to your own BDS / Java server with the HTTP addon or mod.
-    minecraft {
-        access_token = "${env.BVC_ACCESS_TOKEN}"
     }
 
     # Optional: extra server list shown in the BVC app (Bedrock Voice Chat Connect).
@@ -61,6 +40,7 @@ server {
 
 voice {
     spatial_audio {
+        # How far (in blocks) voices carry.
         broadcast_range = 48.0
     }
 }

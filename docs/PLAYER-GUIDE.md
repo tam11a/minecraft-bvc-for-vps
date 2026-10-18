@@ -3,8 +3,8 @@
 Players near you in-game sound close; players far away fade out. This guide gets you set up in about 5 minutes.
 
 **From the server owner, you need:**
-- the **voice server address**, e.g. `voice.example.com`
-- a one-time **login code** (valid 24 hours; ask for a new one if it expired)
+- the **voice server address**, e.g. `https://yourname.duckdns.org`
+- to be **added** to the server (the owner does this with your exact Xbox gamertag), and optionally a one-time **login code** (valid 24 hours)
 
 ---
 
@@ -20,11 +20,12 @@ Download **Bedrock Voice Chat** for your device: <https://www.bedrockvoicechat.c
 
 ## 2. Sign in (first time only)
 
-1. Open the app and choose to sign in to a server.
-2. Enter the voice server address, e.g. `voice.example.com`.
-3. Sign in with the **Xbox account you play Minecraft with** and enter your login code when asked.
+1. Open the app and enter the voice server address, including `https://`, e.g. `https://yourname.duckdns.org`. Not the Realm, and not an IP address.
+2. Sign in one of two ways:
+   - **Microsoft sign-in:** use the **Xbox account you play Minecraft with**. Works once the owner has added you.
+   - **Login code:** enter the code the owner sent you. Single-use, expires after 24 hours.
 
-Getting `AUTH02`? You haven't been added yet. Ask the owner to run `add-player.sh` with your exact gamertag.
+Getting `AUTH02`? You haven't been added yet. Ask the owner to run `add-player.sh` with your exact gamertag. More detail: [Signing in](https://www.bedrockvoicechat.com/wiki/player/signing-in/).
 
 ## 3. Connect to the Realm (every time you play)
 
