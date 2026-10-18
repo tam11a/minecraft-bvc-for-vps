@@ -10,7 +10,7 @@ LEGO_IMAGE="goacme/lego:v4.35.2"
 
 env_value() { grep -E "^$1=" .env | tail -n1 | cut -d= -f2- | tr -d '\r' | sed -E "s/^[\"']|[\"']$//g"; }
 
-[ -f .env ] || { echo ".env not found. Run setup.sh first."; exit 1; }
+[ -f .env ] || { echo ".env not found. Run install.sh first."; exit 1; }
 domain="$(env_value BVC_DOMAIN)"
 token="$(env_value DUCKDNS_TOKEN)"
 email="$(env_value CERT_EMAIL)"

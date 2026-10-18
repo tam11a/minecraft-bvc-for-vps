@@ -3,7 +3,7 @@
 Work from the outside in: **server reachable → certificate → UDP → players → Realm addon**.
 Upstream reference: [BVC troubleshooting](https://www.bedrockvoicechat.com/wiki/server/troubleshooting/).
 
-Run commands on the VPS from the repo folder (`/opt/stacks/bvc`) unless noted. Most logs and restarts are also available in the [web portal](MANAGING.md).
+Run commands on the VPS from the repo folder (`/opt/stacks/bvc`) unless noted. **First try re-running `sudo bash install.sh`**: it checks the setup step by step and stops with a message at the first problem. Most logs and restarts are also available in the [web portal](MANAGING.md).
 
 ---
 
@@ -146,8 +146,8 @@ Don't try to put BVC behind nginx/Caddy as an HTTP reverse proxy. It needs end-t
 | Symptom | Cause / fix |
 |---|---|
 | `https://<hostname>:8443` times out | 8443/tcp not open in ufw or the provider firewall (or limited to a different IP than yours). |
-| Browser certificate warning on :8443 | Portal started before the certificate existed, or uses the wrong cert lines (option B must use the `acme/cert.pem` lines in `portal/compose.yaml`). Fix, then `docker restart bvc-portal`. |
-| Portal container keeps restarting | Certificate files missing: `docker logs bvc-portal`. Run `bash cert.sh` (option A) or start BVC first (option B). |
+| Browser certificate warning on :8443 | Portal uses an old or wrong certificate. Re-run `sudo bash install.sh` (it rewrites `portal/.env` for your TLS option), or `docker restart bvc-portal` after a renewal. |
+| Portal container keeps restarting | Certificate files missing: `docker logs bvc-portal`. Re-run `sudo bash install.sh`. |
 | **bvc** stack not listed | The repo isn't at `/opt/stacks/bvc`. Move it there and restart the portal. |
 | Terminal says bash not found | Switch the terminal shell to **sh**. |
 | Forgot the portal password | Over SSH: `docker exec -it bvc-portal npm run reset-password` |

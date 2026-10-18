@@ -6,7 +6,7 @@ After the one-time setup in [DEPLOY.md](../DEPLOY.md), you don't need to log in 
 |---|---|
 | **BVC app** (as admin) | Add players, give/remove admin and other permissions |
 | **Web portal** (`https://<your-hostname>:8443`) | Update BVC, restart, read logs, edit settings, run admin commands |
-| **Automatic** (cron, installed by `setup.sh`) | Certificate renewal, nightly backups |
+| **Automatic** (cron, installed by `install.sh`) | Certificate renewal, nightly backups |
 
 ---
 
@@ -23,7 +23,7 @@ After the one-time setup in [DEPLOY.md](../DEPLOY.md), you don't need to log in 
 
 ## What runs automatically
 
-`setup.sh` installs these cron jobs (tagged `# bvc-managed` in root's crontab):
+`install.sh` installs these cron jobs (tagged `# bvc-managed` in root's crontab):
 
 | Job | When | Notes |
 |---|---|---|
@@ -37,7 +37,7 @@ Containers restart by themselves after crashes and VPS reboots.
 
 ## In the BVC app
 
-You need admin once. If you followed DEPLOY.md you already have it. Otherwise run `bvc-server admin bootstrap -p YourGamertag -g minecraft` in the [portal terminal](#run-bvc-admin-commands-terminal).
+You need admin once. If you gave your gamertag to `install.sh`, you already have it. Otherwise run `bvc-server admin bootstrap -p YourGamertag -g minecraft` in the [portal terminal](#run-bvc-admin-commands-terminal).
 
 Open **Settings → Manage Players**:
 
@@ -157,8 +157,8 @@ The portal can control Docker, so whoever logs in has **full control of the VPS*
 
 ## When you still need SSH
 
-- First-time setup ([DEPLOY.md](../DEPLOY.md) Phases 2–4).
+- First-time setup (`install.sh`, see [DEPLOY.md](../DEPLOY.md)), and re-running it after `git pull`.
 - Restoring a backup, or copying backups off the VPS (`scp`).
-- Changing `portal/compose.yaml` itself (portal version, port, option B certificate lines).
+- Changing `portal/compose.yaml` itself (portal version, port).
 - Running `cert.sh` manually if a renewal keeps failing.
 - Anything that breaks the portal itself.

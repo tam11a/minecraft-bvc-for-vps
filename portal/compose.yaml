@@ -4,7 +4,7 @@
 #
 # Requirements:
 #   - This repo must live at /opt/stacks/bvc (Dockge needs the same path inside and outside).
-#   - Start it from this folder:  docker compose up -d
+#   - install.sh starts it. Manually: docker compose -f portal/compose.yaml up -d
 #   - Open the portal RIGHT AWAY and create the admin account: the first visitor creates it.
 #
 # Security: the portal controls Docker, which means full control of the VPS.
@@ -24,9 +24,8 @@ services:
     environment:
       DOCKGE_STACKS_DIR: /opt/stacks
       # HTTPS with the voice server's own certificate (same hostname, port 8443).
-      # Option A (DuckDNS, cert.sh), default:
-      DOCKGE_SSL_CERT: /opt/stacks/bvc/data/tls/fullchain.pem
-      DOCKGE_SSL_KEY: /opt/stacks/bvc/data/tls/privkey.pem
-      # Option B (Cloudflare, BVC's built-in ACME): use these two lines instead.
-      # DOCKGE_SSL_CERT: /opt/stacks/bvc/data/certificates/acme/cert.pem
-      # DOCKGE_SSL_KEY: /opt/stacks/bvc/data/certificates/acme/key.pem
+      # install.sh writes portal/.env with the right paths for your TLS option:
+      #   option A (DuckDNS):    /opt/stacks/bvc/data/tls/fullchain.pem + privkey.pem
+      #   option B (Cloudflare): /opt/stacks/bvc/data/certificates/acme/cert.pem + key.pem
+      DOCKGE_SSL_CERT: ${PORTAL_SSL_CERT:-/opt/stacks/bvc/data/tls/fullchain.pem}
+      DOCKGE_SSL_KEY: ${PORTAL_SSL_KEY:-/opt/stacks/bvc/data/tls/privkey.pem}

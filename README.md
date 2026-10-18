@@ -50,11 +50,12 @@ voice by distance.
 
 ## Features
 
-- 🐳 **One `docker compose up`.** Pinned official image, working healthcheck, auto-restart, log rotation.
+- ⚡ **One-command install.** `install.sh` asks a few questions and sets up everything (Docker, certificate, firewall, cron, server, portal, admin). Safe to re-run.
+- 🐳 **Docker Compose.** Pinned official image, working healthcheck, auto-restart, log rotation.
 - 🆓 **No domain required.** Free DuckDNS subdomain with automatic Let's Encrypt certificates (`cert.sh`), or your own domain on Cloudflare.
 - 🔑 **No secrets in git.** Everything sensitive lives in `.env`.
 - 🖥️ **Manage from the browser.** A web portal ([Dockge](https://github.com/louislam/dockge)) on `https://<hostname>:8443` to update, restart, read logs, edit settings and run admin commands. Players and permissions are managed in the BVC app.
-- 🤖 **Self-maintaining.** `setup.sh` installs cron jobs for certificate renewal and nightly backups.
+- 🤖 **Self-maintaining.** Cron jobs for certificate renewal and nightly backups are installed for you.
 - 👥 **Player helper.** `add-player.sh` registers a Realm player and prints their login code.
 - 💾 **Backups.** `backup.sh` snapshots the database (which holds the login certificate authority).
 - 📖 **Full docs.** [Deployment guide](DEPLOY.md), [player guide](docs/PLAYER-GUIDE.md), [troubleshooting](docs/TROUBLESHOOTING.md).
@@ -71,37 +72,23 @@ voice by distance.
 
 ## Quick start
 
-For the full walkthrough (VPS, firewall, both TLS options, Realm world), see **[DEPLOY.md](DEPLOY.md)**.
+1. Get a VPS (Ubuntu) and a free hostname at [duckdns.org](https://www.duckdns.org) (add a subdomain, copy the token).
+2. On the VPS, as root:
 
-Using a free DuckDNS name (create the subdomain and copy your token at [duckdns.org](https://www.duckdns.org) first). On the VPS, as root:
+   ```bash
+   git clone https://github.com/tam11a/minecraft-bvc-for-vps.git /opt/stacks/bvc
+   ```
 
-```bash
-git clone https://github.com/tam11a/minecraft-bvc-for-vps.git /opt/stacks/bvc && cd /opt/stacks/bvc
-```
+   ```bash
+   cd /opt/stacks/bvc && sudo bash install.sh
+   ```
 
-```bash
-bash setup.sh
-```
+   The installer asks for your subdomain, token, email and Xbox gamertag, then sets up everything: Docker, certificate, firewall, voice server, web portal, cron jobs, and your admin account.
+3. Open `https://<your-hostname>:8443` **right away** and create the web portal account.
+4. In the BVC app, sign in to `https://<your-hostname>`, then add friends under **Settings → Manage Players**.
+5. Put the **no-net** addon on your Realm ([DEPLOY.md, Phase 5](DEPLOY.md#phase-5-put-the-addon-on-the-realm)) and share the [player guide](docs/PLAYER-GUIDE.md).
 
-Set `BVC_DOMAIN`, `DUCKDNS_TOKEN` and `CERT_EMAIL` in `.env`, then run setup again (installs the renewal and backup cron jobs):
-
-```bash
-nano .env && bash setup.sh
-```
-
-Get the certificate, start the voice server and the web portal:
-
-```bash
-bash cert.sh && docker compose up -d && (cd portal && docker compose up -d)
-```
-
-Open `https://<your-hostname>:8443` **right away** and create the portal account. Then make yourself BVC admin (last SSH step):
-
-```bash
-bash add-player.sh YourGamertag && docker compose exec bvc bvc-server admin bootstrap -p YourGamertag -g minecraft
-```
-
-From here on: add players in the BVC app (**Settings → Manage Players**), and update/restart/configure in the portal ([docs/MANAGING.md](docs/MANAGING.md)). Upload a world with the **no-net** addon to your Realm ([DEPLOY.md, Phase 6](DEPLOY.md#phase-6-put-the-addon-on-the-realm)) and share the [player guide](docs/PLAYER-GUIDE.md).
+Done. From now on you manage it from the app and the portal ([docs/MANAGING.md](docs/MANAGING.md)), with no SSH needed. The full walkthrough, including the own-domain option, is in **[DEPLOY.md](DEPLOY.md)**.
 
 ## Documentation
 
@@ -121,10 +108,10 @@ From here on: add players in the BVC app (**Settings → Manage Players**), and 
 ├── .env.example          # Template for settings/secrets → copied to .env
 ├── data/
 │   └── config.hcl        # BVC server config (hostname from .env)
-├── setup.sh              # One-time VPS setup: .env, permissions, ufw
-├── cert.sh               # Option A: DuckDNS IP update + certificate get/renew (lego)
+├── install.sh            # All-in-one installer (run this)
+├── cert.sh               # Option A: DuckDNS IP update + certificate get/renew (cron)
 ├── add-player.sh         # Register a player + print a login code
-├── backup.sh             # Snapshot ./data to ./backups
+├── backup.sh             # Snapshot ./data to ./backups (cron)
 ├── portal/
 │   └── compose.yaml      # Web portal (Dockge) on :8443
 ├── DEPLOY.md             # Deployment guide
@@ -136,7 +123,7 @@ From here on: add players in the BVC app (**Settings → Manage Players**), and 
 └── LICENSE
 ```
 
-At runtime the server writes `data/bvc.sqlite3`, `data/certificates/` and `data/logs/`; `cert.sh` writes `data/tls/` and `lego/`; the portal writes `portal/data/`. All of these are git-ignored. The repo must live at `/opt/stacks/bvc` for the portal to manage it.
+At runtime the server writes `data/bvc.sqlite3`, `data/certificates/` and `data/logs/`; `cert.sh` writes `data/tls/` and `lego/`; the installer writes `.env` and `portal/.env`; the portal writes `portal/data/`. All of these are git-ignored. The repo must live at `/opt/stacks/bvc` for the portal to manage it.
 
 ## Configuration
 
@@ -153,7 +140,7 @@ At runtime the server writes `data/bvc.sqlite3`, `data/certificates/` and `data/
 | `BVC_ACME_EMAIL` | B | Let's Encrypt account email. |
 | `BVC_ACME_API_TOKEN` | B | Cloudflare token, one zone, DNS edit. |
 
-Fill in **one** option and leave the other's values empty; the server refuses to start with two certificate sources. BVC reads `BVC_*` variables directly ([environment variables reference](https://www.bedrockvoicechat.com/wiki/reference/environment-variables/)), so any other documented `BVC_*` setting can be added to `.env` too.
+`install.sh` fills these in for you. If you edit by hand, fill in **one** option and leave the other's values empty; the server refuses to start with two certificate sources. BVC reads `BVC_*` variables directly ([environment variables reference](https://www.bedrockvoicechat.com/wiki/reference/environment-variables/)), so any other documented `BVC_*` setting can be added to `.env` too.
 
 ### `data/config.hcl`
 
