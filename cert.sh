@@ -40,8 +40,9 @@ if sudo test -f "lego/certificates/${domain}.crt"; then
 else
   action=(run)
 fi
-docker run --rm -e DUCKDNS_TOKEN="$token" -v "$PWD/lego:/lego" "$LEGO_IMAGE" \
-  --accept-tos --email "$email" --dns duckdns --domains "$domain" --path /lego "${action[@]}"
+# Mounted at /data: in the lego image, /lego is the lego program itself.
+docker run --rm -e DUCKDNS_TOKEN="$token" -v "$PWD/lego:/data" "$LEGO_IMAGE" \
+  --accept-tos --email "$email" --dns duckdns --domains "$domain" --path /data "${action[@]}"
 
 # 3. Install it where BVC reads it (BVC_TLS_CERTIFICATE / BVC_TLS_KEY), owned by the container user.
 #    lego's .crt already contains the full chain.
