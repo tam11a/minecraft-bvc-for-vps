@@ -1,0 +1,17 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data written by the server (DB holds the login CA; never commit it)
+data/*
+!data/config.hcl
+
+# Backups
+backups/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

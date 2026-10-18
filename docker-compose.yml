@@ -1,0 +1,33 @@
+# Bedrock Voice Chat (BVC) server, runs on the voice VPS.
+# Players' BVC apps connect here; with a Realm the apps relay positions (no link to the Realm needed).
+# Setup: see DEPLOY.md. Upstream docs: https://www.bedrockvoicechat.com/wiki/server/docker/
+
+services:
+  bvc:
+    image: ghcr.io/alaydriem/bedrock-voice-chat/server:${BVC_VERSION:-1.0.0-beta.23}
+    container_name: bvc
+    restart: always
+    user: "100:101"
+    cap_add:
+      - NET_BIND_SERVICE
+    ports:
+      - "443:443/tcp"       # HTTP API, login, WebSocket voice fallback
+      - "28280:28280/udp"   # QUIC voice
+      # - "28284:28284/udp" # Peering with other BVC servers (only if you use peering)
+    env_file:
+      - .env
+    volumes:
+      # Holds config.hcl, the SQLite DB (contains the mTLS CA — back it up!), certs and logs.
+      - ./data:/data
+    healthcheck:
+      # The certificate is issued for BVC_DOMAIN, so resolve that name to the container itself.
+      test: ["CMD", "curl", "-fsS", "--resolve", "${BVC_DOMAIN}:443:127.0.0.1", "https://${BVC_DOMAIN}/health/readiness"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s    # first start has to obtain the Let's Encrypt certificate
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,5 @@
+# Scripts and configs run on Linux: always check them out with LF line endings,
+# even from Windows (CRLF breaks bash with "$'\r': command not found").
+* text=auto eol=lf
+*.png binary
+*.jpg binary
