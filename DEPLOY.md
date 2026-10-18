@@ -1,7 +1,7 @@
 # Deployment guide
 
 A step-by-step guide from an empty VPS to friends talking in your Realm. Follow the phases in order.
-Most of it is a one-time setup, about 30–60 minutes. [Phase 7](#phase-7-day-2-operations) covers upkeep.
+Most of it is a one-time setup over SSH, about 30–60 minutes. After that you manage everything from the BVC app and a web portal. See [docs/MANAGING.md](docs/MANAGING.md).
 
 > Throughout this guide, replace `yourname.duckdns.org` (or `voice.example.com`) with your own hostname and `YourGamertag` with real Xbox gamertags.
 
@@ -14,7 +14,7 @@ Most of it is a one-time setup, about 30–60 minutes. [Phase 7](#phase-7-day-2-
 - [Phase 1: Get a VPS](#phase-1-get-a-vps)
 - [Phase 2: Prepare the VPS](#phase-2-prepare-the-vps)
 - [Phase 3: Install and configure](#phase-3-install-and-configure)
-- [Phase 4: Certificate and start](#phase-4-certificate-and-start)
+- [Phase 4: Certificate, start, web portal](#phase-4-certificate-start-web-portal)
 - [Phase 5: Admin and players](#phase-5-admin-and-players)
 - [Phase 6: Put the addon on the Realm](#phase-6-put-the-addon-on-the-realm)
 - [Phase 7: Day-2 operations](#phase-7-day-2-operations)
@@ -118,6 +118,7 @@ If your provider also has a **cloud firewall** (Hetzner Firewall, DigitalOcean C
 | 22 | TCP | SSH |
 | 443 | TCP | Login, HTTP API, WebSocket voice fallback |
 | 28280 | UDP | Voice (QUIC) |
+| 8443 | TCP | Web portal (ideally only from your own IP; see [Securing the portal](docs/MANAGING.md#securing-the-portal)) |
 
 Port 80 is **not** needed: both certificate options use DNS validation.
 
@@ -125,17 +126,17 @@ Port 80 is **not** needed: both certificate options use DNS validation.
 
 ## Phase 3: Install and configure
 
-Clone the repository to `/opt/bvc`:
+Clone the repository to **`/opt/stacks/bvc`** (the web portal requires exactly this path):
 
 ```bash
-git clone https://github.com/tam11a/minecraft-bvc-for-vps.git /opt/bvc
+git clone https://github.com/tam11a/minecraft-bvc-for-vps.git /opt/stacks/bvc
 ```
 
 ```bash
-cd /opt/bvc
+cd /opt/stacks/bvc
 ```
 
-Run the setup script. It creates `.env`, makes `./data` writable for the container user (uid 100, gid 101) and opens 443/tcp + 28280/udp in ufw:
+Run the setup script. The first run creates `.env`, makes `./data` writable for the container user (uid 100, gid 101) and opens 443/tcp, 28280/udp and 8443/tcp in ufw:
 
 ```bash
 bash setup.sh
@@ -169,9 +170,15 @@ Leave `BVC_VERSION` as is unless you're upgrading. It must match the players' ap
 
 > Setting both options makes the server refuse to start. Only one certificate source may be configured.
 
+Run setup again. With `.env` filled in, it installs the cron jobs for certificate renewal (option A) and nightly backups, then prints your next commands:
+
+```bash
+bash setup.sh
+```
+
 ---
 
-## Phase 4: Certificate and start
+## Phase 4: Certificate, start, web portal
 
 ### Option A: get the certificate first
 
@@ -226,13 +233,25 @@ curl https://yourname.duckdns.org/api/config
 
 UDP 28280 can't be tested with curl. If players can sign in but hear nothing, UDP is the cause. See [troubleshooting](docs/TROUBLESHOOTING.md#sign-in-works-but-nobody-hears-anything).
 
+### Start the web portal
+
+**Option B only:** first edit `portal/compose.yaml` and swap the two `DOCKGE_SSL_*` lines for the option B ones.
+
+```bash
+cd portal && docker compose up -d && cd ..
+```
+
+**Right away**, open `https://yourname.duckdns.org:8443` and create the portal admin account with a long, unique password. Until you do, anyone who opens the page can create it. You should see the **bvc** stack listed.
+
+Then lock it down if you can: see [Securing the portal](docs/MANAGING.md#securing-the-portal).
+
 ---
 
 ## Phase 5: Admin and players
 
-A Realm can't tell BVC who your players are, so **every player must be added**. Unknown players get `AUTH02` when signing in.
+A Realm can't tell BVC who your players are, so **every player must be added before they sign in**. Unknown players get `AUTH02`.
 
-### 5.1 Make yourself admin
+### 5.1 Make yourself admin (last SSH step)
 
 ```bash
 bash add-player.sh YourGamertag
@@ -242,19 +261,15 @@ bash add-player.sh YourGamertag
 docker compose exec bvc bvc-server admin bootstrap -p YourGamertag -g minecraft
 ```
 
-The first command registers you and prints a one-time **login code** (valid 24 h). The second gives you admin.
+The first command registers you and prints a one-time **login code** (valid 24 h). The second gives you admin. Install the [BVC app](https://www.bedrockvoicechat.com/wiki/start/downloads/) and sign in with `https://yourname.duckdns.org` and your Microsoft account (or the code).
 
-### 5.2 Add each player
+You can log out of SSH now. 🎉
 
-```bash
-bash add-player.sh FriendGamertag
-```
+### 5.2 Add players from the app
 
-Send each player the server address (`https://yourname.duckdns.org`), their code and the [player guide](docs/PLAYER-GUIDE.md).
+In the BVC app: **Settings → Manage Players** → add each friend by exact Xbox gamertag. They then sign in with their Microsoft account. Send them the server address (`https://yourname.duckdns.org`) and the [player guide](docs/PLAYER-GUIDE.md).
 
-- Codes are single-use and expire after 24 h (pass a second argument in seconds to change that). Run the script again for a new one.
-- Once added, players can also sign in with their Microsoft account instead of a code.
-- Once you're signed in as admin, you can add players in the app too: **Settings → Manage Players**.
+Need a one-time code for someone instead? Use the portal's container terminal ([docs/MANAGING.md](docs/MANAGING.md#run-bvc-admin-commands-terminal)) or `bash add-player.sh Gamertag` over SSH.
 
 ---
 
@@ -304,36 +319,20 @@ You should see connection activity and no repeated errors.
 
 ## Phase 7: Day-2 operations
 
-### Certificate renewal (option A only)
+Day to day, use the **BVC app** and the **web portal**. [docs/MANAGING.md](docs/MANAGING.md) covers every task. This section is the reference for what runs automatically and for the SSH-only tasks.
 
-Let's Encrypt certificates last 90 days. Run `cert.sh` daily from cron. It only renews when fewer than 30 days are left and restarts BVC only when the certificate changed. Open the crontab:
+### Certificate renewal
 
-```bash
-crontab -e
-```
-
-Add this line:
-
-```
-30 3 * * * cd /opt/bvc && bash cert.sh >> lego/renew.log 2>&1
-```
-
-Option B needs nothing: BVC renews its own certificate.
+Automatic. `setup.sh` installed a daily cron job for `cert.sh` (option A), which renews when fewer than 30 days are left and restarts BVC and the portal only when the certificate changed. With option B, BVC renews its own certificate and a weekly cron job reloads the portal. See the jobs with `crontab -l`.
 
 ### Backups
 
 `./data/bvc.sqlite3` contains the **certificate authority for every player login**. Lose it and every player has to be re-added and signed in again.
 
-Create a backup (stops the server for a few seconds, writes `backups/bvc-data-<timestamp>.tar.gz`, keeps the newest 14):
+Automatic: `setup.sh` installed a nightly job (04:00) that stops the server for a few seconds and writes `backups/bvc-data-<timestamp>.tar.gz`, keeping the newest 14. For an extra backup over SSH:
 
 ```bash
 bash backup.sh
-```
-
-Nightly at 04:00 via cron:
-
-```
-0 4 * * * cd /opt/bvc && bash backup.sh >> backups/backup.log 2>&1
 ```
 
 Copy backups **off the VPS** now and then (e.g. `scp` to your PC). A backup that lives only on the VPS is lost along with the VPS.
@@ -361,26 +360,19 @@ docker compose up -d
 The server, the Realm addon and every player's app must be on the **same BVC release**. Upgrade them together.
 
 1. Read the release notes and the [upgrade notes](https://www.bedrockvoicechat.com/wiki/upgrading/).
-2. Back up:
-   ```bash
-   bash backup.sh
-   ```
-3. Set the new `BVC_VERSION` in `.env`.
-4. Pull and restart:
-   ```bash
-   docker compose pull && docker compose up -d
-   ```
-5. Check `docker compose logs` (database migrations run on start).
-6. Rebuild/update the Realm world with the matching `bvc-bds-pack-no-net-<version>.mcaddon` (Phase 6).
-7. Tell players to update the app.
+2. **Portal:** bvc stack → Edit → set the new `BVC_VERSION` in `.env` → Save → **Update** ([details](docs/MANAGING.md#update-bvc-to-a-new-version)).
+   **Or over SSH:** `bash backup.sh`, edit `BVC_VERSION` in `.env`, then `docker compose pull && docker compose up -d`.
+3. Check the logs (database migrations run on start).
+4. Rebuild/update the Realm world with the matching `bvc-bds-pack-no-net-<version>.mcaddon` (Phase 6).
+5. Tell players to update the app.
 
 ### When Mojang updates Minecraft
 
 Realms update automatically. The no-net addon is tied to one Bedrock protocol version, so **voice stops working on the day of a Minecraft update** until BVC ships support (check [version support](https://www.bedrockvoicechat.com/wiki/platforms/version-support/)). Then do the upgrade above.
 
-### Useful commands
+### Useful SSH commands
 
-Run all of these from `/opt/bvc`.
+Most of these have portal buttons. Run them from `/opt/stacks/bvc`.
 
 | Task | Command |
 |---|---|
@@ -391,6 +383,7 @@ Run all of these from `/opt/bvc`.
 | Add a player | `bash add-player.sh <Gamertag>` |
 | Give admin | `docker compose exec bvc bvc-server admin bootstrap -p <Gamertag> -g minecraft` |
 | Renew certificate now (option A) | `bash cert.sh` |
+| Restart the web portal | `docker restart bvc-portal` |
 | Debug logging | set `level = "debug"` in `data/config.hcl`, then restart |
 | JSON log files | `./data/logs/` |
 
@@ -402,18 +395,30 @@ Run all of these from `/opt/bvc`.
 docker compose down
 ```
 
-Then delete `/opt/bvc` (back up `data/` first if you might come back), remove the cron lines, and delete the DuckDNS subdomain or the DNS record + Cloudflare token.
+```bash
+docker rm -f bvc-portal
+```
+
+Remove the cron jobs:
+
+```bash
+crontab -l | grep -v '# bvc-managed' | crontab -
+```
+
+Then delete `/opt/stacks/bvc` (back up `data/` first if you might come back), and delete the DuckDNS subdomain or the DNS record + Cloudflare token.
 
 ---
 
 ## Final checklist
 
 - [ ] Hostname resolves to the VPS (`nslookup yourname.duckdns.org`); Cloudflare record is **grey cloud** (option B)
-- [ ] 443/tcp and 28280/udp open in ufw **and** the provider firewall
+- [ ] Repo at `/opt/stacks/bvc`; `setup.sh` run twice (cron jobs installed: `crontab -l`)
+- [ ] 443/tcp, 28280/udp and 8443/tcp open in ufw **and** the provider firewall
 - [ ] Only **one** TLS option filled in `.env`
 - [ ] `docker compose ps` shows **healthy**
 - [ ] `curl https://<hostname>/api/config` returns JSON from outside
-- [ ] You're admin; every player added with `add-player.sh`
+- [ ] Portal at `https://<hostname>:8443` with your account created; port ideally limited to your IP
+- [ ] You're admin in the app; players added via **Manage Players**
 - [ ] Realm world has the **no-net** pack + Beta APIs, same version as `BVC_VERSION`
 - [ ] Two people tested: joined via the **Worlds** tab and can hear each other
-- [ ] Cron jobs: `cert.sh` daily (option A) and `backup.sh` nightly; backups copied off the VPS
+- [ ] Backups occasionally copied off the VPS

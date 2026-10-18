@@ -11,6 +11,9 @@ data/*
 lego/
 backups/
 
+# Web portal state (accounts, settings)
+portal/data/
+
 # OS / editor noise
 .DS_Store
 Thumbs.db

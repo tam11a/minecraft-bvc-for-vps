@@ -3,7 +3,7 @@
 Work from the outside in: **server reachable → certificate → UDP → players → Realm addon**.
 Upstream reference: [BVC troubleshooting](https://www.bedrockvoicechat.com/wiki/server/troubleshooting/).
 
-Run commands on the VPS from the repo folder (e.g. `/opt/bvc`) unless noted.
+Run commands on the VPS from the repo folder (`/opt/stacks/bvc`) unless noted. Most logs and restarts are also available in the [web portal](MANAGING.md).
 
 ---
 
@@ -89,7 +89,7 @@ When a player's network blocks UDP entirely, the app falls back to WebSocket voi
 
 | Symptom | Fix |
 |---|---|
-| `AUTH02` | Player isn't registered: `bash add-player.sh <Gamertag>` (exact Xbox gamertag). |
+| `AUTH02` | Player isn't registered: add them in the app (**Manage Players**) or `bash add-player.sh <Gamertag>` (exact Xbox gamertag). |
 | Code rejected | Single-use, expires (24 h with `add-player.sh`). Generate a new one. |
 | Everyone suddenly signed out | `data/bvc.sqlite3` was lost/replaced (it holds the login CA). Restore it from a backup, or re-add everyone. |
 | App says version mismatch / can't open session | App and server are on different BVC releases. Align `BVC_VERSION` with the app. |
@@ -140,6 +140,18 @@ If the VPS already runs a web server on 443, move BVC's TCP port, e.g. to 8443:
 5. Players use `https://yourname.duckdns.org:8443` as the server address.
 
 Don't try to put BVC behind nginx/Caddy as an HTTP reverse proxy. It needs end-to-end TLS with client certificates and UDP.
+
+## Web portal problems
+
+| Symptom | Cause / fix |
+|---|---|
+| `https://<hostname>:8443` times out | 8443/tcp not open in ufw or the provider firewall (or limited to a different IP than yours). |
+| Browser certificate warning on :8443 | Portal started before the certificate existed, or uses the wrong cert lines (option B must use the `acme/cert.pem` lines in `portal/compose.yaml`). Fix, then `docker restart bvc-portal`. |
+| Portal container keeps restarting | Certificate files missing: `docker logs bvc-portal`. Run `bash cert.sh` (option A) or start BVC first (option B). |
+| **bvc** stack not listed | The repo isn't at `/opt/stacks/bvc`. Move it there and restart the portal. |
+| Terminal says bash not found | Switch the terminal shell to **sh**. |
+| Forgot the portal password | Over SSH: `docker exec -it bvc-portal npm run reset-password` |
+| Someone else created the portal account | Over SSH: `docker rm -f bvc-portal && rm -rf portal/data`, then start it again and create your account immediately. |
 
 ## Reporting a problem
 

@@ -1,0 +1,32 @@
+# Web portal for the voice server: Dockge (https://github.com/louislam/dockge).
+# Edit .env and the compose file, update/restart BVC, read logs, and open a terminal
+# inside the BVC container, all from the browser at https://<BVC_DOMAIN>:8443
+#
+# Requirements:
+#   - This repo must live at /opt/stacks/bvc (Dockge needs the same path inside and outside).
+#   - Start it from this folder:  docker compose up -d
+#   - Open the portal RIGHT AWAY and create the admin account: the first visitor creates it.
+#
+# Security: the portal controls Docker, which means full control of the VPS.
+# Use a long unique password. To limit who can reach it, see docs/MANAGING.md.
+
+services:
+  portal:
+    image: louislam/dockge:1.5.0
+    container_name: bvc-portal
+    restart: unless-stopped
+    ports:
+      - "8443:5001/tcp"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data           # portal accounts and settings
+      - /opt/stacks:/opt/stacks    # stacks it manages (the BVC stack is /opt/stacks/bvc)
+    environment:
+      DOCKGE_STACKS_DIR: /opt/stacks
+      # HTTPS with the voice server's own certificate (same hostname, port 8443).
+      # Option A (DuckDNS, cert.sh), default:
+      DOCKGE_SSL_CERT: /opt/stacks/bvc/data/tls/fullchain.pem
+      DOCKGE_SSL_KEY: /opt/stacks/bvc/data/tls/privkey.pem
+      # Option B (Cloudflare, BVC's built-in ACME): use these two lines instead.
+      # DOCKGE_SSL_CERT: /opt/stacks/bvc/data/certificates/acme/cert.pem
+      # DOCKGE_SSL_KEY: /opt/stacks/bvc/data/certificates/acme/key.pem

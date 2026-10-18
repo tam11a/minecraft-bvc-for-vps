@@ -1,6 +1,6 @@
 # Minecraft Realm Proximity Voice Chat
 
-**Self-host proximity voice chat for a Minecraft Bedrock Realm on your own VPS, with Docker Compose. No domain purchase needed.**
+**Self-host proximity voice chat for a Minecraft Bedrock Realm on your own VPS, with Docker Compose. No domain purchase needed, and after setup no SSH needed.**
 
 This repository is a ready-to-deploy setup for the [Bedrock Voice Chat](https://www.bedrockvoicechat.com) (BVC) server, aimed at **Minecraft Realms**: players hear each other based on in-game distance, on PC, mobile and console.
 
@@ -53,6 +53,8 @@ voice by distance.
 - 🐳 **One `docker compose up`.** Pinned official image, working healthcheck, auto-restart, log rotation.
 - 🆓 **No domain required.** Free DuckDNS subdomain with automatic Let's Encrypt certificates (`cert.sh`), or your own domain on Cloudflare.
 - 🔑 **No secrets in git.** Everything sensitive lives in `.env`.
+- 🖥️ **Manage from the browser.** A web portal ([Dockge](https://github.com/louislam/dockge)) on `https://<hostname>:8443` to update, restart, read logs, edit settings and run admin commands. Players and permissions are managed in the BVC app.
+- 🤖 **Self-maintaining.** `setup.sh` installs cron jobs for certificate renewal and nightly backups.
 - 👥 **Player helper.** `add-player.sh` registers a Realm player and prints their login code.
 - 💾 **Backups.** `backup.sh` snapshots the database (which holds the login certificate authority).
 - 📖 **Full docs.** [Deployment guide](DEPLOY.md), [player guide](docs/PLAYER-GUIDE.md), [troubleshooting](docs/TROUBLESHOOTING.md).
@@ -63,7 +65,7 @@ voice by distance.
 |---|---|
 | **VPS** | Linux with Docker + Compose plugin, public IPv4. ~1 vCPU / 512 MB per 5 concurrent speakers. |
 | **Hostname** | A free [DuckDNS](https://www.duckdns.org) name, or your own domain on Cloudflare. BVC rejects bare IPs and self-signed certificates. |
-| **Ports** | `443/tcp` and `28280/udp` open on the VPS. Port 443 must be free. |
+| **Ports** | `443/tcp` and `28280/udp` open on the VPS (port 443 must be free); `8443/tcp` for the web portal. |
 | **Realm** | Bedrock Realm you own, on a [BVC-supported version](https://www.bedrockvoicechat.com/wiki/platforms/version-support/). |
 | **Players** | The [BVC app](https://www.bedrockvoicechat.com/wiki/start/downloads/) (Windows, macOS, Android, iOS; console players use a phone). |
 
@@ -71,49 +73,42 @@ voice by distance.
 
 For the full walkthrough (VPS, firewall, both TLS options, Realm world), see **[DEPLOY.md](DEPLOY.md)**.
 
-Using a free DuckDNS name (create the subdomain and copy your token at [duckdns.org](https://www.duckdns.org) first). On the VPS:
+Using a free DuckDNS name (create the subdomain and copy your token at [duckdns.org](https://www.duckdns.org) first). On the VPS, as root:
 
 ```bash
-git clone https://github.com/tam11a/minecraft-bvc-for-vps.git /opt/bvc && cd /opt/bvc
+git clone https://github.com/tam11a/minecraft-bvc-for-vps.git /opt/stacks/bvc && cd /opt/stacks/bvc
 ```
 
 ```bash
 bash setup.sh
 ```
 
-Set `BVC_DOMAIN`, `DUCKDNS_TOKEN` and `CERT_EMAIL` in `.env`:
+Set `BVC_DOMAIN`, `DUCKDNS_TOKEN` and `CERT_EMAIL` in `.env`, then run setup again (installs the renewal and backup cron jobs):
 
 ```bash
-nano .env
+nano .env && bash setup.sh
 ```
 
-Get the certificate and start:
+Get the certificate, start the voice server and the web portal:
 
 ```bash
-bash cert.sh && docker compose up -d
+bash cert.sh && docker compose up -d && (cd portal && docker compose up -d)
 ```
 
-Register yourself and make yourself admin, then add players:
+Open `https://<your-hostname>:8443` **right away** and create the portal account. Then make yourself BVC admin (last SSH step):
 
 ```bash
-bash add-player.sh YourGamertag
+bash add-player.sh YourGamertag && docker compose exec bvc bvc-server admin bootstrap -p YourGamertag -g minecraft
 ```
 
-```bash
-docker compose exec bvc bvc-server admin bootstrap -p YourGamertag -g minecraft
-```
-
-```bash
-bash add-player.sh FriendGamertag
-```
-
-Then upload a world with the **no-net** addon to your Realm ([DEPLOY.md, Phase 6](DEPLOY.md#phase-6-put-the-addon-on-the-realm)), schedule `cert.sh` and `backup.sh` in cron ([Phase 7](DEPLOY.md#phase-7-day-2-operations)), and share the [player guide](docs/PLAYER-GUIDE.md).
+From here on: add players in the BVC app (**Settings → Manage Players**), and update/restart/configure in the portal ([docs/MANAGING.md](docs/MANAGING.md)). Upload a world with the **no-net** addon to your Realm ([DEPLOY.md, Phase 6](DEPLOY.md#phase-6-put-the-addon-on-the-realm)) and share the [player guide](docs/PLAYER-GUIDE.md).
 
 ## Documentation
 
 | Document | For | Covers |
 |---|---|---|
 | [DEPLOY.md](DEPLOY.md) | Server owner | Step-by-step deployment, certificates, backups, upgrades, Minecraft updates |
+| [docs/MANAGING.md](docs/MANAGING.md) | Server owner / admins | Day-to-day management from the BVC app and the web portal, no SSH |
 | [docs/PLAYER-GUIDE.md](docs/PLAYER-GUIDE.md) | Players | Install the app, sign in, join the Realm with voice |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Everyone | Diagnosing sign-in, audio and certificate problems |
 | [Official BVC wiki](https://www.bedrockvoicechat.com/wiki/) | Everyone | Upstream reference |
@@ -130,15 +125,18 @@ Then upload a world with the **no-net** addon to your Realm ([DEPLOY.md, Phase 6
 ├── cert.sh               # Option A: DuckDNS IP update + certificate get/renew (lego)
 ├── add-player.sh         # Register a player + print a login code
 ├── backup.sh             # Snapshot ./data to ./backups
+├── portal/
+│   └── compose.yaml      # Web portal (Dockge) on :8443
 ├── DEPLOY.md             # Deployment guide
 ├── docs/
+│   ├── MANAGING.md
 │   ├── PLAYER-GUIDE.md
 │   └── TROUBLESHOOTING.md
 ├── CONTRIBUTING.md
 └── LICENSE
 ```
 
-At runtime the server writes `data/bvc.sqlite3`, `data/certificates/` and `data/logs/`; `cert.sh` writes `data/tls/` and `lego/`. All of these are git-ignored.
+At runtime the server writes `data/bvc.sqlite3`, `data/certificates/` and `data/logs/`; `cert.sh` writes `data/tls/` and `lego/`; the portal writes `portal/data/`. All of these are git-ignored. The repo must live at `/opt/stacks/bvc` for the portal to manage it.
 
 ## Configuration
 
@@ -202,6 +200,12 @@ No. The players' apps do all the connecting. The Realm only needs the no-net beh
 **Can console players use it?**
 Yes. They run the BVC app on a phone on the same Wi-Fi, then pick the world under **Worlds** on the console.
 
+**Do I have to SSH in to add players or update?**
+No. After setup, add players in the BVC app and update/restart from the web portal. See [docs/MANAGING.md](docs/MANAGING.md).
+
+**Is the web portal safe to expose?**
+It controls Docker, which means full control of the VPS. Create its account immediately, use a strong password, and preferably allow port 8443 only from your IP. See [Securing the portal](docs/MANAGING.md#securing-the-portal).
+
 **Something else already uses port 443 on my VPS.**
 See [Port 443 is already taken](docs/TROUBLESHOOTING.md#port-443-is-already-taken).
 
@@ -213,7 +217,7 @@ Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Re
 
 - **This repository** (compose file, scripts, config templates, docs): [MIT](LICENSE).
 - **Bedrock Voice Chat** (the container image, apps and addons this setup downloads) is a separate project by Charles R. Portwood II under its own [Clear Horizon Path License](https://github.com/Alaydriem/bedrock-voice-chat/blob/master/LICENSE.md). This repo does not redistribute any BVC code or binaries. You are responsible for complying with BVC's license, including its restrictions on commercial use and on offering BVC as a hosted/managed service. Before v1.0, the BVC license describes the software as for evaluation only. Read it before running a server.
-- [lego](https://github.com/go-acme/lego) (used by `cert.sh` as a container) is MIT licensed.
+- [lego](https://github.com/go-acme/lego) (used by `cert.sh` as a container) and [Dockge](https://github.com/louislam/dockge) (the web portal) are MIT licensed.
 - Minecraft is a trademark of Mojang Synergies AB / Microsoft. This project is not affiliated with them.
 
 ## Credits

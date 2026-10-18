@@ -57,8 +57,12 @@ sudo install -o 100 -g 101 -m 644 "$src_crt" "$dst_dir/fullchain.pem"
 sudo install -o 100 -g 101 -m 600 "$src_key" "$dst_dir/privkey.pem"
 echo "Certificate installed in $dst_dir."
 
-# BVC reads certificate files only at startup.
+# BVC and the web portal read certificate files only at startup.
 if [ -n "$(docker compose ps -q --status running bvc 2>/dev/null)" ]; then
   docker compose restart bvc
   echo "BVC restarted with the new certificate."
+fi
+if [ "$(docker inspect -f '{{.State.Running}}' bvc-portal 2>/dev/null)" = "true" ]; then
+  docker restart bvc-portal >/dev/null
+  echo "Web portal restarted with the new certificate."
 fi

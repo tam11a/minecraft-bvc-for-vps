@@ -25,7 +25,7 @@ Download **Bedrock Voice Chat** for your device: <https://www.bedrockvoicechat.c
    - **Microsoft sign-in:** use the **Xbox account you play Minecraft with**. Works once the owner has added you.
    - **Login code:** enter the code the owner sent you. Single-use, expires after 24 hours.
 
-Getting `AUTH02`? You haven't been added yet. Ask the owner to run `add-player.sh` with your exact gamertag. More detail: [Signing in](https://www.bedrockvoicechat.com/wiki/player/signing-in/).
+Getting `AUTH02`? You haven't been added yet. Ask the owner to add your exact gamertag (BVC app → Manage Players). More detail: [Signing in](https://www.bedrockvoicechat.com/wiki/player/signing-in/).
 
 ## 3. Connect to the Realm (every time you play)
 
@@ -55,7 +55,7 @@ Getting `AUTH02`? You haven't been added yet. Ask the owner to run `add-player.s
 
 | Problem | Try |
 |---|---|
-| `AUTH02` on sign-in | Ask the owner to add your gamertag |
+| `AUTH02` on sign-in | Ask the owner to add your gamertag (Manage Players) |
 | Code doesn't work | It's single-use and expires after 24 h. Ask for a new one. |
 | In the game but hear nobody | You joined the Realm directly. Leave and join via **Worlds**. |
 | Can't hear anyone, and others can't hear you either | Tell the owner. Usually a server firewall (UDP) problem. |
